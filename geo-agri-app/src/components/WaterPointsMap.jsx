@@ -38,6 +38,11 @@ const WaterPointsMap = () => {
     soilSalinity: '',
     soilPh: ''
   });
+  // Etat DMS synchronisé
+  const [dms, setDms] = useState({
+    latDeg: '', latMin: '', latSec: '', latDir: 'N',
+    lngDeg: '', lngMin: '', lngSec: '', lngDir: 'E'
+  });
 
   // Données de démonstration simplifiées
   const demoPoints = [
@@ -70,6 +75,71 @@ const WaterPointsMap = () => {
     const seconds = ((minutesFloat - minutes) * 60).toFixed(2);
     const direction = isLatitude ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
     return `${degrees}°${minutes}'${seconds}"${direction}`;
+  };
+
+  // Helpers conversion décimal <-> DMS
+  const decimalToDMSParts = (value, isLat) => {
+    if (value === '' || value === null || isNaN(parseFloat(value))) return { deg: '', min: '', sec: '', dir: isLat ? 'N' : 'E' };
+    const dec = parseFloat(value);
+    const dir = isLat ? (dec >= 0 ? 'N' : 'S') : (dec >= 0 ? 'E' : 'W');
+    const abs = Math.abs(dec);
+    const deg = Math.floor(abs);
+    const minutesFloat = (abs - deg) * 60;
+    const min = Math.floor(minutesFloat);
+    const sec = ((minutesFloat - min) * 60).toFixed(2);
+    return { deg: String(deg), min: String(min), sec: String(sec), dir };
+  };
+  const dmsPartsToDecimal = (deg, min, sec, dir, isLat) => {
+    let d = parseInt(deg || '0', 10);
+    let m = parseInt(min || '0', 10);
+    let s = parseFloat(sec || '0');
+    if (isNaN(d) || isNaN(m) || isNaN(s)) return '';
+    // clamp
+    if (isLat) { d = Math.min(Math.max(d, 0), 90); } else { d = Math.min(Math.max(d, 0), 180); }
+    m = Math.min(Math.max(m, 0), 59);
+    s = Math.min(Math.max(s, 0), 59.9999);
+    let decimal = d + (m / 60) + (s / 3600);
+    if ((dir === 'S' && isLat) || (dir === 'W' && !isLat)) decimal = -decimal;
+    return decimal.toFixed(6);
+  };
+  // Effets de synchronisation (décimal -> DMS)
+  useEffect(() => {
+    if (newPoint.latitude !== '') {
+      const { deg, min, sec, dir } = decimalToDMSParts(newPoint.latitude, true);
+      setDms(prev => ({ ...prev, latDeg: deg, latMin: min, latSec: sec, latDir: dir }));
+    } else {
+      setDms(prev => ({ ...prev, latDeg: '', latMin: '', latSec: '', latDir: 'N' }));
+    }
+  }, [newPoint.latitude]);
+  useEffect(() => {
+    if (newPoint.longitude !== '') {
+      const { deg, min, sec, dir } = decimalToDMSParts(newPoint.longitude, false);
+      setDms(prev => ({ ...prev, lngDeg: deg, lngMin: min, lngSec: sec, lngDir: dir }));
+    } else {
+      setDms(prev => ({ ...prev, lngDeg: '', lngMin: '', lngSec: '', lngDir: 'E' }));
+    }
+  }, [newPoint.longitude]);
+
+  // Gestion modifications DMS -> décimal
+  const handleDmsChange = (e, field) => {
+    const value = e.target.value.replace(/[^0-9.]/g, '');
+    setDms(prev => ({ ...prev, [field]: value }));
+  };
+  const handleDmsDirChange = (e, field) => {
+    const value = e.target.value;
+    setDms(prev => ({ ...prev, [field]: value }));
+  };
+  const applyDmsToDecimal = (isLat) => {
+    setDms(prev => {
+      if (isLat) {
+        const dec = dmsPartsToDecimal(prev.latDeg, prev.latMin, prev.latSec, prev.latDir, true);
+        if (dec !== '') setNewPoint(p => ({ ...p, latitude: dec }));
+      } else {
+        const dec = dmsPartsToDecimal(prev.lngDeg, prev.lngMin, prev.lngSec, prev.lngDir, false);
+        if (dec !== '') setNewPoint(p => ({ ...p, longitude: dec }));
+      }
+      return prev;
+    });
   };
 
   // Chargement initial (backend ou fallback démo)
@@ -387,15 +457,41 @@ const WaterPointsMap = () => {
                 <input type="text" name="owner" value={newPoint.owner} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
+                {/* Champs décimaux */}
                 <div>
-                  <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Latitude</label>
+                  <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Latitude (décimal)</label>
                   <input type="number" step="0.000001" name="latitude" value={newPoint.latitude} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
                 </div>
                 <div>
-                  <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Longitude</label>
+                  <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Longitude (décimal)</label>
                   <input type="number" step="0.000001" name="longitude" value={newPoint.longitude} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
                 </div>
               </div>
+              {/* Saisie DMS synchronisée */}
+              <fieldset style={{border:'1px solid #ccc',padding:'10px',borderRadius:'6px',marginBottom:'12px'}}>
+                <legend style={{fontSize:'11px',color:'#555'}}>Coordonnées en DMS</legend>
+                <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:'4px',alignItems:'center'}}>
+                    <span style={{gridColumn:'span 8',fontSize:'11px',fontWeight:'600',color:'#2E7D32'}}>Latitude</span>
+                    <input placeholder="Deg" value={dms.latDeg} onChange={(e)=>handleDmsChange(e,'latDeg')} onBlur={()=>applyDmsToDecimal(true)} style={{gridColumn:'span 2',padding:'4px',fontSize:'11px'}} />
+                    <input placeholder="Min" value={dms.latMin} onChange={(e)=>handleDmsChange(e,'latMin')} onBlur={()=>applyDmsToDecimal(true)} style={{gridColumn:'span 2',padding:'4px',fontSize:'11px'}} />
+                    <input placeholder="Sec" value={dms.latSec} onChange={(e)=>handleDmsChange(e,'latSec')} onBlur={()=>applyDmsToDecimal(true)} style={{gridColumn:'span 3',padding:'4px',fontSize:'11px'}} />
+                    <select value={dms.latDir} onChange={(e)=>{handleDmsDirChange(e,'latDir'); applyDmsToDecimal(true);}} style={{gridColumn:'span 1',padding:'4px',fontSize:'11px'}}>
+                      <option>N</option><option>S</option>
+                    </select>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:'4px',alignItems:'center'}}>
+                    <span style={{gridColumn:'span 8',fontSize:'11px',fontWeight:'600',color:'#2E7D32'}}>Longitude</span>
+                    <input placeholder="Deg" value={dms.lngDeg} onChange={(e)=>handleDmsChange(e,'lngDeg')} onBlur={()=>applyDmsToDecimal(false)} style={{gridColumn:'span 2',padding:'4px',fontSize:'11px'}} />
+                    <input placeholder="Min" value={dms.lngMin} onChange={(e)=>handleDmsChange(e,'lngMin')} onBlur={()=>applyDmsToDecimal(false)} style={{gridColumn:'span 2',padding:'4px',fontSize:'11px'}} />
+                    <input placeholder="Sec" value={dms.lngSec} onChange={(e)=>handleDmsChange(e,'lngSec')} onBlur={()=>applyDmsToDecimal(false)} style={{gridColumn:'span 3',padding:'4px',fontSize:'11px'}} />
+                    <select value={dms.lngDir} onChange={(e)=>{handleDmsDirChange(e,'lngDir'); applyDmsToDecimal(false);}} style={{gridColumn:'span 1',padding:'4px',fontSize:'11px'}}>
+                      <option>E</option><option>W</option>
+                    </select>
+                  </div>
+                  <div style={{fontSize:'10px',color:'#777'}}>La modification des valeurs DMS met automatiquement à jour les champs décimaux.</div>
+                </div>
+              </fieldset>
               <div style={{marginBottom:'12px'}}>
                 <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Surface (hectares)</label>
                 <input type="number" step="0.1" name="surfaceArea" value={newPoint.surfaceArea} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
