@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -15,1375 +15,480 @@ L.Icon.Default.mergeOptions({
 });
 
 const WaterPointsMap = () => {
-  console.log('🗺️ WaterPointsMap: Version complète avec formulaire et carte');
-  
+  // Points stockés (démonstration ou backend si dispo)
   const [waterPoints, setWaterPoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [clickPosition, setClickPosition] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const mapRef = useRef(null);
+  const osmLayerRef = useRef(null);
+  const satLayerRef = useRef(null);
   const [newPoint, setNewPoint] = useState({
     latitude: '',
     longitude: '',
     owner: '',
     surfaceArea: '',
-    // Analyse d'eau
+    // Analyse eau
     flowRate: '',
     waterSalinity: '',
-    // Analyse de sol
+    // Analyse sol
     activeLimestone: '',
     organicMatter: '',
     soilSalinity: '',
     soilPh: ''
   });
 
-  // États pour la saisie en format DMS
-  const [dmsInput, setDmsInput] = useState({
-    showDMS: false,
-    latDegrees: '',
-    latMinutes: '',
-    latSeconds: '',
-    latDirection: 'N',
-    lngDegrees: '',
-    lngMinutes: '',
-    lngSeconds: '',
-    lngDirection: 'E'
-  });
-
-  // Données de démonstration avec nouvelles analyses
+  // Données de démonstration simplifiées
   const demoPoints = [
-    {
-      _id: 'demo1',
-      latitude: 36.8065,
-      longitude: 10.1815,
-      owner: 'Administration Tunis',
-      surfaceArea: '5.2',
-      // Analyse d'eau
-      flowRate: '120',
-      waterSalinity: '1.2',
-      // Analyse de sol
-      activeLimestone: '15.5',
-      organicMatter: '3.2',
-      soilSalinity: '0.8',
-      soilPh: '7.4'
-    },
-    {
-      _id: 'demo2',
-      latitude: 35.0378,
-      longitude: 9.4856,
-      owner: 'Coopérative Sidi Bouzid',
-      surfaceArea: '12.8',
-      // Analyse d'eau
-      flowRate: '200',
-      waterSalinity: '0.8',
-      // Analyse de sol
-      activeLimestone: '22.1',
-      organicMatter: '2.8',
-      soilSalinity: '0.5',
-      soilPh: '7.1'
-    },
-    {
-      _id: 'demo3',
-      latitude: 35.1677,
-      longitude: 8.8368,
-      owner: 'Ferme Kasserine',
-      surfaceArea: '8.5',
-      // Analyse d'eau
-      flowRate: '80',
-      waterSalinity: '0.5',
-      // Analyse de sol
-      activeLimestone: '18.9',
-      organicMatter: '1.9',
-      soilSalinity: '0.7',
-      soilPh: '7.8'
-    }
+    { _id: 'demo1', latitude: 36.8065, longitude: 10.1815, owner: 'Administration Tunis', surfaceArea: '5.2', flowRate: '110', waterSalinity: '1.1', activeLimestone: '18', organicMatter: '2.9', soilSalinity: '0.7', soilPh: '7.2' },
+    { _id: 'demo2', latitude: 35.0378, longitude: 9.4856, owner: 'Coopérative Sidi Bouzid', surfaceArea: '12.8', flowRate: '160', waterSalinity: '0.9', activeLimestone: '22', organicMatter: '2.4', soilSalinity: '0.9', soilPh: '7.6' },
+    { _id: 'demo3', latitude: 35.1677, longitude: 8.8368, owner: 'Ferme Kasserine', surfaceArea: '8.5', flowRate: '95', waterSalinity: '1.4', activeLimestone: '28', organicMatter: '1.8', soilSalinity: '1.3', soilPh: '6.8' }
   ];
 
-  // Composant pour gérer les clics sur la carte (optionnel)
+  // Gestion du clic sur la carte pour remplir les coordonnées si le formulaire est ouvert
   const MapClickHandler = () => {
     useMapEvents({
       click: (e) => {
-        // Seulement si le formulaire est ouvert, on peut cliquer pour remplir les coordonnées
         if (showAddForm) {
           const { lat, lng } = e.latlng;
-          console.log('🎯 Clic sur la carte:', lat, lng);
-          setClickPosition({ lat, lng });
-          setNewPoint(prev => ({
-            ...prev,
-            latitude: lat.toFixed(6),
-            longitude: lng.toFixed(6)
-          }));
+            setClickPosition({ lat, lng });
+            setNewPoint(prev => ({ ...prev, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
         }
       }
     });
     return null;
   };
 
-  // Fonction de génération PDF
-  const generatePDF = async (point) => {
-    try {
-      console.log('📄 Génération PDF pour:', point.owner);
-      
-      const pdf = new jsPDF();
-      
-      // En-tête
-      pdf.setFontSize(20);
-      pdf.text('🗺️ Rapport Point d\'Eau - Geo-Agri', 20, 20);
-      
-      // Informations générales
-      pdf.setFontSize(16);
-      pdf.text('📍 Informations Générales', 20, 40);
-      pdf.setFontSize(12);
-      pdf.text(`Propriétaire: ${point.owner}`, 25, 55);
-      pdf.text(`Surface de terrain: ${point.surfaceArea} hectares`, 25, 70);
-      pdf.text(`Latitude: ${point.latitude}°`, 25, 85);
-      pdf.text(`Longitude: ${point.longitude}°`, 25, 100);
-      
-      // Analyse de l'eau
-      pdf.setFontSize(16);
-      pdf.text('💧 Analyse de l\'Eau', 20, 120);
-      pdf.setFontSize(12);
-      pdf.text(`Débit: ${point.flowRate} L/min`, 25, 135);
-      pdf.text(`Salinité: ${point.waterSalinity} g/L`, 25, 150);
-      
-      // Évaluation qualité eau
-      const waterQuality = evaluateWaterQuality(point);
-      pdf.text(`Qualité de l'eau: ${waterQuality.level}`, 25, 165);
-      
-      // Analyse du sol
-      pdf.setFontSize(16);
-      pdf.text('🌱 Analyse du Sol', 20, 185);
-      pdf.setFontSize(12);
-      pdf.text(`Calcaire actif: ${point.activeLimestone}%`, 25, 200);
-      pdf.text(`Matière Organique: ${point.organicMatter}%`, 25, 215);
-      pdf.text(`Salinité du sol: ${point.soilSalinity} dS/m`, 25, 230);
-      pdf.text(`pH du sol: ${point.soilPh}`, 25, 245);
-      
-      // Évaluation fertilité sol
-      const soilFertility = evaluateSoilFertility(point);
-      pdf.text(`Fertilité du sol: ${soilFertility.level}`, 25, 260);
-      
-      // Pied de page
-      pdf.setFontSize(10);
-      pdf.text(`Rapport généré le: ${new Date().toLocaleDateString('fr-FR')}`, 20, 275);
-      
-      pdf.save(`rapport_${point.owner.replace(/\s+/g, '_')}.pdf`);
-      console.log('✅ PDF généré avec succès');
-      
-    } catch (error) {
-      console.error('❌ Erreur génération PDF:', error);
-    }
-  };
-
-  // Fonction de suppression
-  const handleDelete = async (pointId) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce point d\'eau ?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`http://localhost:5000/api/points/${pointId}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        setWaterPoints(prev => prev.filter(point => point._id !== pointId));
-        console.log('✅ Point supprimé avec succès');
-      } else {
-        throw new Error('Erreur backend');
-      }
-    } catch (error) {
-      console.error('❌ Erreur suppression:', error);
-      // Suppression locale en cas d'erreur
-      setWaterPoints(prev => prev.filter(point => point._id !== pointId));
-      console.log('⚠️ Point supprimé localement');
-    }
-  };
-
-  useEffect(() => {
-    console.log('🔄 Chargement des points d\'eau avec analyses...');
-    
-    setTimeout(() => {
-      fetch('http://localhost:5000/api/points')
-        .then(res => {
-          if (!res.ok) throw new Error('Backend non disponible');
-          return res.json();
-        })
-        .then(data => {
-          console.log('✅ Données récupérées du backend:', data);
-          setWaterPoints(Array.isArray(data) && data.length > 0 ? data : demoPoints);
-        })
-        .catch(err => {
-          console.log('⚠️ Backend non disponible, utilisation des données de démo');
-          setWaterPoints(demoPoints);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }, 1000);
-  }, []);
-
-  // Fonctions d'évaluation
-  const evaluateWaterQuality = (point) => {
-    const flowRate = parseFloat(point.flowRate) || 0;
-    const waterSalinity = parseFloat(point.waterSalinity) || 0;
-    
-    let score = 0;
-    let issues = [];
-    
-    // Évaluation du débit (optimal: >10 L/min)
-    if (flowRate >= 20) {
-      score += 3;
-    } else if (flowRate >= 10) {
-      score += 2;
-    } else if (flowRate >= 5) {
-      score += 1;
-      issues.push('Débit faible');
-    } else {
-      score += 0;
-      issues.push('Débit très faible');
-    }
-    
-    // Évaluation salinité de l'eau (optimal: ≤1.0 g/L)
-    if (waterSalinity <= 1.0) {
-      score += 3;
-    } else if (waterSalinity <= 2.0) {
-      score += 2;
-      issues.push('Salinité modérée');
-    } else if (waterSalinity <= 3.0) {
-      score += 1;
-      issues.push('Salinité élevée');
-    } else {
-      score += 0;
-      issues.push('Salinité très élevée');
-    }
-    
-    // Score final sur 6 points (au lieu de 9)
-    if (score >= 5) return { level: 'Excellente', color: '#4CAF50', icon: '✓', issues };
-    if (score >= 3) return { level: 'Bonne', color: '#FF9800', icon: '⚠️', issues };
-    return { level: 'Médiocre', color: '#F44336', icon: '⚠️', issues };
-  };
-
-  const evaluateSoilFertility = (point) => {
-    const activeLimestone = parseFloat(point.activeLimestone) || 0;
-    const organicMatter = parseFloat(point.organicMatter) || 0;
-    const soilSalinity = parseFloat(point.soilSalinity) || 0;
-    const soilPh = parseFloat(point.soilPh) || 0;
-    
-    let score = 0;
-    let recommendations = [];
-    
-    // Calcaire actif (optimal: 10-25%)
-    if (activeLimestone >= 10 && activeLimestone <= 25) {
-      score += 3;
-    } else if (activeLimestone >= 5 && activeLimestone <= 30) {
-      score += 2;
-      if (activeLimestone < 10) recommendations.push('Calcaire actif faible');
-      if (activeLimestone > 25) recommendations.push('Calcaire actif élevé');
-    } else {
-      score += 1;
-      if (activeLimestone < 5) recommendations.push('Carence en calcaire actif');
-      if (activeLimestone > 30) recommendations.push('Excès de calcaire actif');
-    }
-    
-    // Matière organique (optimal: ≥3.0%)
-    if (organicMatter >= 3.0) {
-      score += 3;
-    } else if (organicMatter >= 2.0) {
-      score += 2;
-      recommendations.push('Augmenter la matière organique');
-    } else {
-      score += 1;
-      recommendations.push('Sol pauvre en matière organique');
-    }
-    
-    // Salinité du sol (optimal: ≤2.0 dS/m)
-    if (soilSalinity <= 2.0) {
-      score += 3;
-    } else if (soilSalinity <= 4.0) {
-      score += 2;
-      recommendations.push('Salinité modérée du sol');
-    } else {
-      score += 1;
-      recommendations.push('Sol trop salin');
-    }
-    
-    // pH du sol (optimal: 6.5-7.5)
-    if (soilPh >= 6.5 && soilPh <= 7.5) {
-      score += 3;
-    } else if (soilPh >= 6.0 && soilPh <= 8.0) {
-      score += 2;
-      if (soilPh < 6.5) recommendations.push('Sol légèrement acide');
-      if (soilPh > 7.5) recommendations.push('Sol légèrement basique');
-    } else {
-      score += 1;
-      if (soilPh < 6.0) recommendations.push('Sol trop acide');
-      if (soilPh > 8.0) recommendations.push('Sol trop basique');
-    }
-    
-    if (score >= 10) return { level: 'Très fertile', color: '#4CAF50', icon: '✓', recommendations };
-    if (score >= 8) return { level: 'Fertile', color: '#8BC34A', icon: '✓', recommendations };
-    if (score >= 6) return { level: 'Moyennement fertile', color: '#FF9800', icon: '⚠️', recommendations };
-    return { level: 'Peu fertile', color: '#F44336', icon: '⚠️', recommendations };
-  };
-
-  // Fonction pour convertir les coordonnées décimales vers DMS
+  // Conversion décimal -> DMS (gardé pour affichage lisible)
   const convertToDMS = (decimal, isLatitude) => {
-    const absolute = Math.abs(decimal);
+    const absolute = Math.abs(parseFloat(decimal));
+    if (isNaN(absolute)) return '';
     const degrees = Math.floor(absolute);
     const minutesFloat = (absolute - degrees) * 60;
     const minutes = Math.floor(minutesFloat);
     const seconds = ((minutesFloat - minutes) * 60).toFixed(2);
-    
-    const direction = isLatitude 
-      ? (decimal >= 0 ? 'N' : 'S')
-      : (decimal >= 0 ? 'E' : 'W');
-    
+    const direction = isLatitude ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
     return `${degrees}°${minutes}'${seconds}"${direction}`;
   };
 
-  // Fonction pour convertir DMS vers décimal
-  const convertDMSToDecimal = (degrees, minutes, seconds, direction) => {
-    let decimal = parseFloat(degrees) + parseFloat(minutes)/60 + parseFloat(seconds)/3600;
-    if (direction === 'S' || direction === 'W') {
-      decimal = -decimal;
-    }
-    return decimal;
-  };
+  // Chargement initial (backend ou fallback démo)
+  useEffect(() => {
+    fetch('http://localhost:5000/api/points')
+      .then(res => { if (!res.ok) throw new Error('Backend indisponible'); return res.json(); })
+      .then(data => setWaterPoints(Array.isArray(data) && data.length ? data : demoPoints))
+      .catch(() => setWaterPoints(demoPoints))
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Générer des coordonnées aléatoirement pour la Tunisie
-  const generateRandomCoordinates = () => {
-    const tunisiaLat = 34 + Math.random() * 4; // Entre 32°N et 36°N
-    const tunisiaLng = 8 + Math.random() * 4;  // Entre 8°E et 12°E
-    
-    setClickPosition({ lat: tunisiaLat, lng: tunisiaLng });
-    setNewPoint(prev => ({
-      ...prev,
-      latitude: tunisiaLat.toFixed(6),
-      longitude: tunisiaLng.toFixed(6)
-    }));
-  };
-
-  // Gestion des changements dans le formulaire
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewPoint(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setNewPoint(prev => ({ ...prev, [name]: value }));
   };
 
-  // Gestion des changements DMS
-  const handleDMSChange = (e) => {
-    const { name, value } = e.target;
-    const newDmsInput = { ...dmsInput, [name]: value };
-    setDmsInput(newDmsInput);
+  const filteredPoints = waterPoints.filter(p => p.owner.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    // Conversion automatique vers décimal si tous les champs sont remplis
-    if (newDmsInput.latDegrees && newDmsInput.latMinutes && newDmsInput.latSeconds) {
-      const latDecimal = convertDMSToDecimal(
-        newDmsInput.latDegrees, 
-        newDmsInput.latMinutes, 
-        newDmsInput.latSeconds, 
-        newDmsInput.latDirection
-      );
-      setNewPoint(prev => ({ ...prev, latitude: latDecimal.toFixed(6) }));
-    }
-
-    if (newDmsInput.lngDegrees && newDmsInput.lngMinutes && newDmsInput.lngSeconds) {
-      const lngDecimal = convertDMSToDecimal(
-        newDmsInput.lngDegrees, 
-        newDmsInput.lngMinutes, 
-        newDmsInput.lngSeconds, 
-        newDmsInput.lngDirection
-      );
-      setNewPoint(prev => ({ ...prev, longitude: lngDecimal.toFixed(6) }));
-    }
-  };
-
-  // Ajout d'un nouveau point
   const handleAddPoint = async (e) => {
     e.preventDefault();
-    
+    const payload = { ...newPoint };
     try {
-      const response = await fetch('http://localhost:5000/api/points', {
+      const res = await fetch('http://localhost:5000/api/points', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newPoint),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-
-      if (response.ok) {
-        const savedPoint = await response.json();
-        setWaterPoints(prev => [...prev, savedPoint]);
-        console.log('✅ Point ajouté avec succès:', savedPoint);
+      if (res.ok) {
+        const saved = await res.json();
+        setWaterPoints(prev => [...prev, saved]);
       } else {
-        // Simulation locale si backend non disponible
-        const simulatedPoint = {
-          ...newPoint,
-          _id: 'local_' + Date.now()
-        };
-        setWaterPoints(prev => [...prev, simulatedPoint]);
-        console.log('⚠️ Point ajouté localement:', simulatedPoint);
+        // fallback local si backend absent
+        setWaterPoints(prev => [...prev, { ...payload, _id: 'local_' + Date.now() }]);
       }
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'ajout:', error);
-      // Ajout local en cas d'erreur
-      const simulatedPoint = {
-        ...newPoint,
-        _id: 'local_' + Date.now()
-      };
-      setWaterPoints(prev => [...prev, simulatedPoint]);
+    } catch {
+      setWaterPoints(prev => [...prev, { ...payload, _id: 'local_' + Date.now() }]);
     }
-
-    // Réinitialiser le formulaire
+    // reset
     setShowAddForm(false);
-    setNewPoint({
-      latitude: '',
-      longitude: '',
-      owner: '',
-      surfaceArea: '',
-      flowRate: '',
-      waterSalinity: '',
-      activeLimestone: '',
-      organicMatter: '',
-      soilSalinity: '',
-      soilPh: ''
-    });
-    setDmsInput({
-      showDMS: false,
-      latDegrees: '',
-      latMinutes: '',
-      latSeconds: '',
-      latDirection: 'N',
-      lngDegrees: '',
-      lngMinutes: '',
-      lngSeconds: '',
-      lngDirection: 'E'
-    });
+    setNewPoint({ latitude: '', longitude: '', owner: '', surfaceArea: '', flowRate: '', waterSalinity: '', activeLimestone: '', organicMatter: '', soilSalinity: '', soilPh: '' });
     setClickPosition(null);
   };
 
-  // Suppression d'un point
   const handleDeletePoint = async (pointId) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce point d\'eau ?')) {
-      try {
-        const response = await fetch(`http://localhost:5000/api/points/${pointId}`, {
-          method: 'DELETE',
-        });
+    if (!window.confirm('Supprimer ce point ?')) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/points/${pointId}`, { method: 'DELETE' });
+      if (res.ok || pointId.startsWith('local_') || pointId.startsWith('demo')) {
+        setWaterPoints(p => p.filter(pt => pt._id !== pointId));
+      }
+    } catch {
+      setWaterPoints(p => p.filter(pt => pt._id !== pointId));
+    }
+  };
 
-        if (response.ok || pointId.startsWith('local_') || pointId.startsWith('demo')) {
-          setWaterPoints(prev => prev.filter(point => point._id !== pointId));
-          console.log('✅ Point supprimé:', pointId);
+  // Utilitaire: conversion image URL -> dataURL (fallback static map)
+  const urlToDataURL = (url) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        resolve(c.toDataURL('image/png'));
+      } catch (e) { reject(e); }
+    };
+    img.onerror = reject;
+    img.src = url + (url.includes('?') ? '&' : '?') + 'cacheBust=' + Date.now();
+  });
+
+  const getStaticMapFallback = async (lat, lng) => {
+    const zoom = 15;
+    const size = '600x400';
+    const staticURL = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=${size}&markers=${lat},${lng},lightblue1`;
+    try { return await urlToDataURL(staticURL); } catch { return null; }
+  };
+
+  const captureMapFocused = async (lat, lng) => {
+    const map = mapRef.current;
+    if (!map) return null;
+    try {
+      const prevCenter = map.getCenter();
+      const prevZoom = map.getZoom();
+      // Basculer sur satellite si dispo
+      let switchedBase = false;
+      if (satLayerRef.current) {
+        const hasSat = map.hasLayer(satLayerRef.current);
+        if (!hasSat) {
+          // retirer OSM si présent
+            if (osmLayerRef.current && map.hasLayer(osmLayerRef.current)) map.removeLayer(osmLayerRef.current);
+          map.addLayer(satLayerRef.current);
+          switchedBase = true;
+          // attendre premier chargement tuiles sat
+          await new Promise(r => setTimeout(r, 400));
         }
-      } catch (error) {
-        console.error('❌ Erreur lors de la suppression:', error);
-        // Suppression locale même en cas d'erreur
-        setWaterPoints(prev => prev.filter(point => point._id !== pointId));
+      }
+      map.closePopup();
+      const targetZoom = 15;
+      const highlight = L.circle([lat, lng], { radius: 70, color: '#ff5722', weight: 2, fill: false });
+      highlight.addTo(map);
+      map.setView([lat, lng], targetZoom, { animate: false });
+      await new Promise(r => map.once('moveend', r));
+      const mapContainer = map.getContainer();
+      // attendre tuiles satellite
+      const tiles = Array.from(mapContainer.querySelectorAll('img.leaflet-tile'));
+      if (tiles.length) {
+        await new Promise(resolve => {
+          let remaining = tiles.length;
+          const done = () => { if (--remaining === 0) resolve(); };
+          tiles.forEach(img => {
+            if (img.complete && img.naturalWidth > 0) done(); else {
+              img.addEventListener('load', done, { once: true });
+              img.addEventListener('error', done, { once: true });
+            }
+          });
+          setTimeout(resolve, 2000);
+        });
+      } else {
+        await new Promise(r => setTimeout(r, 500));
+      }
+      await new Promise(r => setTimeout(r, 120));
+      const canvas = await html2canvas(mapContainer, { useCORS: true, logging: false, scale: 2, backgroundColor: '#ffffff' });
+      const data = canvas.toDataURL('image/jpeg', 0.92);
+      map.setView(prevCenter, prevZoom, { animate: false });
+      highlight.remove();
+      // Restaurer couche précédente si on a forcé
+      if (switchedBase && osmLayerRef.current) {
+        map.addLayer(osmLayerRef.current);
+        if (satLayerRef.current && map.hasLayer(satLayerRef.current)) map.removeLayer(satLayerRef.current);
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Fallback mosaïque tuiles (construction manuelle sans html2canvas)
+  const buildTileMosaic = async (lat, lng, zoom = 15, radius = 1) => {
+    try {
+      const tileSize = 256;
+      const lon2tile = (lon, z) => Math.floor((lon + 180) / 360 * Math.pow(2, z));
+      const lat2tile = (la, z) => Math.floor((1 - Math.log(Math.tan(la * Math.PI / 180) + 1 / Math.cos(la * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
+      const centerX = lon2tile(lng, zoom);
+      const centerY = lat2tile(lat, zoom);
+      const tiles = [];
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const x = centerX + dx;
+          const y = centerY + dy;
+          const url = `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+          tiles.push({ dx, dy, url });
+        }
+      }
+      // Fetch en parallèle
+      const fetched = await Promise.all(tiles.map(async t => {
+        try {
+          const resp = await fetch(t.url, { mode: 'cors' });
+          const blob = await resp.blob();
+          const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(blob); });
+          return { ...t, img };
+        } catch { return null; }
+      }));
+      if (!fetched.filter(f => f).length) return null;
+      const side = radius * 2 + 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = side * tileSize; canvas.height = side * tileSize;
+      const ctx = canvas.getContext('2d');
+      fetched.forEach(f => { if (f && f.img) ctx.drawImage(f.img, (f.dx + radius) * tileSize, (f.dy + radius) * tileSize); });
+      // Marqueur centre
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, canvas.height / 2, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(255,87,34,0.9)';
+      ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      return canvas.toDataURL('image/png');
+    } catch {
+      return null;
+    }
+  };
+
+  // Génération PDF simple pour un point + snapshot carte (zoom centré sans popup)
+  const generatePDF = async (point) => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Rapport Point d'Eau", 15, 20);
+    doc.setFontSize(12);
+    let y = 35;
+    const addLine = (txt) => { doc.text(txt, 15, y); y += 7; };
+    addLine(`Propriétaire: ${point.owner || 'N/A'}`);
+    addLine(`Surface: ${point.surfaceArea || 'N/A'} ha`);
+    addLine(`Latitude: ${point.latitude || 'N/A'} (${convertToDMS(point.latitude, true)})`);
+    addLine(`Longitude: ${point.longitude || 'N/A'} (${convertToDMS(point.longitude, false)})`);
+    y += 5;
+    doc.setFontSize(13); doc.text("Analyse de l'Eau", 15, y); y += 8; doc.setFontSize(12);
+    addLine(`Débit (L/min): ${point.flowRate || 'N/A'}`);
+    addLine(`Salinité (g/L): ${point.waterSalinity || 'N/A'}`);
+    y += 5;
+    doc.setFontSize(13); doc.text('Analyse du Sol', 15, y); y += 8; doc.setFontSize(12);
+    addLine(`Calcaire actif (%): ${point.activeLimestone || 'N/A'}`);
+    addLine(`Matière organique (%): ${point.organicMatter || 'N/A'}`);
+    addLine(`Salinité sol (dS/m): ${point.soilSalinity || 'N/A'}`);
+    addLine(`pH sol: ${point.soilPh || 'N/A'}`);
+
+    const lat = parseFloat(point.latitude); const lng = parseFloat(point.longitude);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      let imgData = await captureMapFocused(lat, lng);
+      if (!imgData) {
+        // Fallback mosaïque locale (évite CORS)
+        imgData = await buildTileMosaic(lat, lng, 15, 1);
+      }
+      if (!imgData) {
+        // Dernier fallback: static map externe
+        imgData = await getStaticMapFallback(lat, lng);
+      }
+      if (imgData) {
+        if (y > 180) { doc.addPage(); y = 20; }
+        doc.setFontSize(13); doc.text('Vue Carte (point)', 15, y); y += 5;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const maxImgWidth = pageWidth - 30;
+        const imgWidth = maxImgWidth;
+        const tmpImg = new Image();
+        tmpImg.src = imgData;
+        await new Promise(r => { tmpImg.onload = r; tmpImg.onerror = r; });
+        const imgHeight = (tmpImg.naturalHeight / tmpImg.naturalWidth) * imgWidth;
+        doc.addImage(imgData, 'PNG', 15, y, imgWidth, imgHeight);
+        y += imgHeight + 5;
+      } else {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFontSize(10); doc.text('Carte non disponible (CORS / réseau)', 15, y); y += 6;
       }
     }
+
+    doc.setFontSize(10);
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}` , 15, y + 5);
+    doc.save(`point_eau_${(point.owner||'inconnu').replace(/\s+/g,'_')}.pdf`);
   };
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '400px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '10px'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>🧪</div>
-          <h3>Chargement des analyses...</h3>
+      <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'400px',background:'#f8f9fa',borderRadius:'10px'}}>
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:'48px',marginBottom:'20px'}}>🗺️</div>
+          <h3>Chargement...</h3>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '10px',
-      padding: '20px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-    }}>
-      <h2 style={{
-        color: '#2E7D32',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }}>
-        🧪 Points d'Eau avec Analyses Complètes
-      </h2>
+    <div style={{background:'white',borderRadius:'10px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,0.1)'}}>
+      <h2 style={{color:'#2E7D32',marginBottom:'20px',display:'flex',alignItems:'center',gap:'10px'}}>🗺️ Points d'Eau (Vue Simplifiée)</h2>
 
       {/* Contrôles */}
-      <div style={{
-        marginBottom: '20px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '10px',
-        alignItems: 'center'
-      }}>
-        <button
-          onClick={() => setShowAddForm(true)}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
-        >
-          ➕ Ajouter Point d'Eau
-        </button>
-        
-        <div style={{
-          padding: '8px 15px',
-          backgroundColor: '#e3f2fd',
-          borderRadius: '20px',
-          fontSize: '14px',
-          color: '#1976d2'
-        }}>
-          📊 {waterPoints.length} point(s) analysé(s)
-        </div>
+      <div style={{marginBottom:'15px',display:'flex',flexWrap:'wrap',gap:'10px',alignItems:'center'}}>
+        <button onClick={() => setShowAddForm(true)} style={{padding:'10px 20px',background:'#28a745',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontSize:'14px'}}>➕ Ajouter Point</button>
+        <div style={{padding:'6px 14px',background:'#e3f2fd',borderRadius:'20px',fontSize:'13px',color:'#1976d2'}}>💧 {filteredPoints.length}/{waterPoints.length} point(s)</div>
+        <input
+          type="text"
+          placeholder="Rechercher propriétaire..."
+          value={searchTerm}
+          onChange={(e)=>setSearchTerm(e.target.value)}
+          style={{flex:'1 1 220px',minWidth:'220px',padding:'8px 10px',border:'1px solid #ccc',borderRadius:'5px',fontSize:'13px'}}
+        />
       </div>
 
-      {/* Statistiques de qualité */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '15px',
-        marginBottom: '25px'
-      }}>
-        <div style={{
-          backgroundColor: '#e8f5e8',
-          padding: '15px',
-          borderRadius: '8px',
-          border: '1px solid #c8e6c9'
-        }}>
-          <h4 style={{ margin: '0 0 10px 0', color: '#2e7d32' }}>💧 Qualité de l'Eau</h4>
-          <div style={{ fontSize: '12px' }}>
-            <span style={{ color: '#28a745' }}>Excellente: {waterPoints.filter(p => evaluateWaterQuality(p).level === 'Excellente').length}</span><br/>
-            <span style={{ color: '#ffc107' }}>Bonne: {waterPoints.filter(p => evaluateWaterQuality(p).level === 'Bonne').length}</span><br/>
-            <span style={{ color: '#dc3545' }}>Médiocre: {waterPoints.filter(p => evaluateWaterQuality(p).level === 'Médiocre').length}</span>
-          </div>
-        </div>
-
-        <div style={{
-          backgroundColor: '#fff3e0',
-          padding: '15px',
-          borderRadius: '8px',
-          border: '1px solid #ffcc02'
-        }}>
-          <h4 style={{ margin: '0 0 10px 0', color: '#e65100' }}>🌱 Qualité du Sol</h4>
-          <div style={{ fontSize: '12px' }}>
-            <span style={{ color: '#28a745' }}>Très fertile: {waterPoints.filter(p => evaluateSoilFertility(p).level === 'Très fertile').length}</span><br/>
-            <span style={{ color: '#ffc107' }}>Fertile: {waterPoints.filter(p => evaluateSoilFertility(p).level === 'Fertile').length}</span><br/>
-            <span style={{ color: '#dc3545' }}>Peu fertile: {waterPoints.filter(p => evaluateSoilFertility(p).level === 'Peu fertile').length}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Liste des points avec analyses */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '20px',
-        marginBottom: '30px'
-      }}>
-        {waterPoints.map((point, index) => {
-          const waterQuality = evaluateWaterQuality(point);
-          const soilQuality = evaluateSoilFertility(point);
-          
-          return (
-            <div key={point._id || index} style={{
-              border: '1px solid #ddd',
-              borderRadius: '10px',
-              padding: '20px',
-              backgroundColor: '#f9f9f9'
-            }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '15px'
-              }}>
-                <h4 style={{
-                  color: '#2E7D32',
-                  margin: '0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  💧 Point #{index + 1}
-                </h4>
-                <button
-                  onClick={() => handleDeletePoint(point._id)}
-                  style={{
-                    padding: '5px 10px',
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '3px',
-                    cursor: 'pointer',
-                    fontSize: '12px'
-                  }}
-                >
-                  🗑️
-                </button>
+      {/* Liste très simple */}
+      {waterPoints.length > 0 && (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:'15px',marginBottom:'25px'}}>
+          {filteredPoints.map((p,i) => (
+            <div key={p._id || i} style={{border:'1px solid #ddd',borderRadius:'8px',padding:'12px',background:'#fafafa'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                <strong style={{color:'#2E7D32'}}>Point #{i+1}</strong>
+                <button onClick={() => handleDeletePoint(p._id)} style={{background:'#dc3545',color:'#fff',border:'none',borderRadius:'3px',padding:'4px 8px',cursor:'pointer',fontSize:'11px'}}>✖</button>
               </div>
-
-              {/* Informations générales */}
-              <div style={{ marginBottom: '15px' }}>
-                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                  <strong>👤 Propriétaire:</strong> {point.owner}
-                </p>
-                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                  <strong>🏞️ Surface:</strong> {point.surfaceArea} hectares
-                </p>
-                <p style={{ margin: '5px 0', fontSize: '12px', color: '#666' }}>
-                  <strong>📍 Coordonnées:</strong><br/>
-                  Lat: {convertToDMS(parseFloat(point.latitude), true)}<br/>
-                  Lng: {convertToDMS(parseFloat(point.longitude), false)}
-                </p>
-              </div>
-
-              {/* Analyse de l'eau */}
-              <div style={{
-                backgroundColor: '#e3f2fd',
-                padding: '12px',
-                borderRadius: '6px',
-                marginBottom: '10px'
-              }}>
-                <h5 style={{ 
-                  margin: '0 0 8px 0', 
-                  color: '#1976d2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}>
-                  🧪 Analyse de l'Eau
-                  <span style={{ 
-                    color: waterQuality.color,
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    {waterQuality.level}
-                  </span>
-                </h5>
-                <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
-                  <p style={{ margin: '3px 0' }}>
-                    <strong>Débit:</strong> {point.flowRate} L/min
-                    <span style={{ color: parseFloat(point.flowRate) >= 10 ? '#28a745' : '#dc3545' }}>
-                      {parseFloat(point.flowRate) >= 10 ? ' ✓' : ' ⚠️'}
-                    </span>
-                  </p>
-                  <p style={{ margin: '3px 0' }}>
-                    <strong>Salinité:</strong> {point.waterSalinity} g/L
-                    <span style={{ color: parseFloat(point.waterSalinity) <= 1.0 ? '#28a745' : '#dc3545' }}>
-                      {parseFloat(point.waterSalinity) <= 1.0 ? ' ✓' : ' ⚠️'}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Analyse du sol */}
-              <div style={{
-                backgroundColor: '#fff3e0',
-                padding: '12px',
-                borderRadius: '6px'
-              }}>
-                <h5 style={{ 
-                  margin: '0 0 8px 0', 
-                  color: '#e65100',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}>
-                  🌱 Analyse du Sol
-                  <span style={{ 
-                    color: soilQuality.color,
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    {soilQuality.level}
-                  </span>
-                </h5>
-                <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
-                  <p style={{ margin: '3px 0' }}>
-                    <strong>Calcaire actif:</strong> {point.activeLimestone}%
-                    <span style={{ color: (parseFloat(point.activeLimestone) >= 10 && parseFloat(point.activeLimestone) <= 25) ? '#28a745' : '#dc3545' }}>
-                      {(parseFloat(point.activeLimestone) >= 10 && parseFloat(point.activeLimestone) <= 25) ? ' ✓' : ' ⚠️'}
-                    </span>
-                  </p>
-                  <p style={{ margin: '3px 0' }}>
-                    <strong>Matière organique:</strong> {point.organicMatter}%
-                    <span style={{ color: parseFloat(point.organicMatter) >= 2.0 ? '#28a745' : '#dc3545' }}>
-                      {parseFloat(point.organicMatter) >= 2.0 ? ' ✓' : ' ⚠️'}
-                    </span>
-                  </p>
-                  <p style={{ margin: '3px 0' }}>
-                    <strong>Salinité du sol:</strong> {point.soilSalinity} dS/m
-                    <span style={{ color: parseFloat(point.soilSalinity) <= 2.0 ? '#28a745' : '#dc3545' }}>
-                      {parseFloat(point.soilSalinity) <= 2.0 ? ' ✓' : ' ⚠️'}
-                    </span>
-                  </p>
-                  <p style={{ margin: '3px 0' }}>
-                    <strong>pH du sol:</strong> {point.soilPh}
-                    <span style={{ color: (parseFloat(point.soilPh) >= 6.5 && parseFloat(point.soilPh) <= 7.5) ? '#28a745' : '#dc3545' }}>
-                      {(parseFloat(point.soilPh) >= 6.5 && parseFloat(point.soilPh) <= 7.5) ? ' ✓' : ' ⚠️'}
-                    </span>
-                  </p>
-                </div>
-              </div>
+              <p style={{margin:'4px 0',fontSize:'13px'}}><strong>👤</strong> {p.owner}</p>
+              <p style={{margin:'4px 0',fontSize:'13px'}}><strong>🏞️</strong> {p.surfaceArea} ha</p>
+              <p style={{margin:'4px 0',fontSize:'11px',color:'#555'}}><strong>📍</strong><br/>Lat: {convertToDMS(p.latitude,true)}<br/>Lng: {convertToDMS(p.longitude,false)}</p>
             </div>
-          );
-        })}
-      </div>
-
-      {waterPoints.length === 0 && (
-        <div style={{
-          textAlign: 'center',
-          padding: '40px',
-          color: '#666'
-        }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>🧪</div>
-          <p>Aucune analyse disponible</p>
+          ))}
+          {filteredPoints.length === 0 && (
+            <div style={{gridColumn:'1 / -1',textAlign:'center',padding:'30px',color:'#888',border:'1px dashed #ccc',borderRadius:'8px'}}>
+              Aucun propriétaire ne correspond à "{searchTerm}".
+            </div>
+          )}
         </div>
       )}
 
-      {/* Formulaire d'ajout */}
+      {waterPoints.length === 0 && (
+        <div style={{textAlign:'center',padding:'40px',color:'#666'}}>
+          <div style={{fontSize:'40px',marginBottom:'10px'}}>📭</div>
+          <p>Aucun point pour le moment.</p>
+        </div>
+      )}
+
+      {/* Formulaire simplifié */}
       {showAddForm && (
-        <div style={{
-          position: 'fixed',
-          top: '0',
-          left: '0',
-          right: '0',
-          bottom: '0',
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          overflow: 'auto'
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '25px',
-            borderRadius: '10px',
-            width: '500px',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            margin: '20px'
-          }}>
-            <h3 style={{ marginTop: '0', color: '#2E7D32' }}>
-              ➕ Nouveau Point d'Eau avec Analyses
-            </h3>
-            
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',justifyContent:'center',alignItems:'center',zIndex:1000,padding:'20px'}}>
+          <div style={{background:'#fff',padding:'20px',borderRadius:'10px',width:'420px',maxHeight:'90vh',overflow:'auto'}}>
+            <h3 style={{marginTop:0,color:'#2E7D32'}}>➕ Nouveau Point</h3>
+
             {clickPosition && (
-              <div style={{
-                backgroundColor: '#e8f5e8',
-                padding: '10px',
-                borderRadius: '5px',
-                marginBottom: '15px',
-                fontSize: '12px'
-              }}>
+              <div style={{background:'#e8f5e8',padding:'8px',borderRadius:'5px',marginBottom:'12px',fontSize:'12px'}}>
                 <strong>📍 Position sélectionnée:</strong><br/>
                 Lat: {parseFloat(newPoint.latitude).toFixed(6)}<br/>
                 Lng: {parseFloat(newPoint.longitude).toFixed(6)}
               </div>
             )}
-            
-            {/* Message informatif */}
-            <div style={{
-              backgroundColor: '#f0f8ff',
-              border: '1px solid #bee5eb',
-              padding: '10px',
-              borderRadius: '5px',
-              marginBottom: '15px',
-              fontSize: '12px',
-              color: '#0c5460'
-            }}>
-              <strong>💡 Astuce:</strong> Vous pouvez saisir les coordonnées manuellement ou cliquer sur la carte pour les remplir automatiquement.
-            </div>
-            
+
             <form onSubmit={handleAddPoint}>
-              {/* Informations générales */}
-              <fieldset style={{ 
-                border: '1px solid #ddd', 
-                borderRadius: '5px', 
-                padding: '15px', 
-                marginBottom: '15px' 
-              }}>
-                <legend style={{ color: '#2E7D32', fontWeight: 'bold' }}>
-                  📋 Informations Générales
-                </legend>
-                
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                    👤 Propriétaire:
-                  </label>
-                  <input
-                    type="text"
-                    name="owner"
-                    value={newPoint.owner}
-                    onChange={handleInputChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '3px',
-                      fontSize: '14px'
-                    }}
-                  />
+              <div style={{marginBottom:'10px'}}>
+                <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>👤 Propriétaire</label>
+                <input type="text" name="owner" value={newPoint.owner} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
+                <div>
+                  <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Latitude</label>
+                  <input type="number" step="0.000001" name="latitude" value={newPoint.latitude} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      📍 Latitude (format décimal):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      name="latitude"
-                      value={newPoint.latitude}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Ex: 36.806389"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      📍 Longitude (format décimal):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      name="longitude"
-                      value={newPoint.longitude}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Ex: 10.181667"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
-                  </div>
+                <div>
+                  <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Longitude</label>
+                  <input type="number" step="0.000001" name="longitude" value={newPoint.longitude} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
                 </div>
-
-                {/* Bouton pour basculer vers format DMS */}
-                <div style={{ marginBottom: '10px', textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => setDmsInput(prev => ({ ...prev, showDMS: !prev.showDMS }))}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: dmsInput.showDMS ? '#6c757d' : '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '11px'
-                    }}
-                  >
-                    {dmsInput.showDMS ? '📐 ← Format Décimal' : '📐 Format DMS →'}
-                  </button>
-                </div>
-
-                {/* Champs DMS (conditionnels) */}
-                {dmsInput.showDMS && (
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #dee2e6',
-                    padding: '10px',
-                    borderRadius: '5px',
-                    marginBottom: '10px'
-                  }}>
-                    <h6 style={{ margin: '0 0 10px 0', color: '#495057' }}>📐 Saisie en format DMS</h6>
-                    
-                    {/* Latitude DMS */}
-                    <div style={{ marginBottom: '8px' }}>
-                      <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold' }}>
-                        Latitude:
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 60px', gap: '5px' }}>
-                        <input
-                          type="number"
-                          name="latDegrees"
-                          value={dmsInput.latDegrees}
-                          onChange={handleDMSChange}
-                          placeholder="Degrés"
-                          min="0"
-                          max="90"
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        />
-                        <input
-                          type="number"
-                          name="latMinutes"
-                          value={dmsInput.latMinutes}
-                          onChange={handleDMSChange}
-                          placeholder="Minutes"
-                          min="0"
-                          max="59"
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          name="latSeconds"
-                          value={dmsInput.latSeconds}
-                          onChange={handleDMSChange}
-                          placeholder="Secondes"
-                          min="0"
-                          max="59.99"
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        />
-                        <select
-                          name="latDirection"
-                          value={dmsInput.latDirection}
-                          onChange={handleDMSChange}
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        >
-                          <option value="N">N</option>
-                          <option value="S">S</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Longitude DMS */}
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold' }}>
-                        Longitude:
-                      </label>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 60px', gap: '5px' }}>
-                        <input
-                          type="number"
-                          name="lngDegrees"
-                          value={dmsInput.lngDegrees}
-                          onChange={handleDMSChange}
-                          placeholder="Degrés"
-                          min="0"
-                          max="180"
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        />
-                        <input
-                          type="number"
-                          name="lngMinutes"
-                          value={dmsInput.lngMinutes}
-                          onChange={handleDMSChange}
-                          placeholder="Minutes"
-                          min="0"
-                          max="59"
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          name="lngSeconds"
-                          value={dmsInput.lngSeconds}
-                          onChange={handleDMSChange}
-                          placeholder="Secondes"
-                          min="0"
-                          max="59.99"
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        />
-                        <select
-                          name="lngDirection"
-                          value={dmsInput.lngDirection}
-                          onChange={handleDMSChange}
-                          style={{ padding: '5px', fontSize: '12px', borderRadius: '3px', border: '1px solid #ccc' }}
-                        >
-                          <option value="E">E</option>
-                          <option value="W">W</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Affichage des coordonnées en format DMS */}
-                {newPoint.latitude && newPoint.longitude && (
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #dee2e6',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    marginBottom: '10px',
-                    fontSize: '12px',
-                    color: '#495057'
-                  }}>
-                    <strong>📐 Format DMS:</strong><br/>
-                    <span style={{ color: '#28a745' }}>
-                      Lat: {convertToDMS(parseFloat(newPoint.latitude), true)}<br/>
-                      Lng: {convertToDMS(parseFloat(newPoint.longitude), false)}
-                    </span>
-                  </div>
-                )}
-
-                
-
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                    🏞️ Surface de terrain (hectares):
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    name="surfaceArea"
-                    value={newPoint.surfaceArea}
-                    onChange={handleInputChange}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid #ddd',
-                      borderRadius: '3px',
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-              </fieldset>
-
+              </div>
+              <div style={{marginBottom:'12px'}}>
+                <label style={{display:'block',marginBottom:'4px',fontSize:'13px'}}>Surface (hectares)</label>
+                <input type="number" step="0.1" name="surfaceArea" value={newPoint.surfaceArea} onChange={handleInputChange} required style={{width:'100%',padding:'8px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'13px'}} />
+              </div>
               {/* Analyse de l'eau */}
-              <fieldset style={{ 
-                border: '1px solid #1976d2', 
-                borderRadius: '5px', 
-                padding: '15px', 
-                marginBottom: '15px',
-                backgroundColor: '#f3f8ff'
-              }}>
-                <legend style={{ color: '#1976d2', fontWeight: 'bold' }}>
-                  💧 Analyse de l'Eau
-                </legend>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <fieldset style={{border:'1px solid #1976d2',padding:'10px',borderRadius:'6px',marginBottom:'12px'}}>
+                <legend style={{fontSize:'12px',color:'#1976d2',padding:'0 6px'}}>Analyse de l'Eau</legend>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      💧 Débit (L/min):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="flowRate"
-                      value={newPoint.flowRate}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
+                    <label style={{display:'block',marginBottom:'4px',fontSize:'12px'}}>Débit (L/min)</label>
+                    <input type="number" step="0.1" name="flowRate" value={newPoint.flowRate} onChange={handleInputChange} style={{width:'100%',padding:'6px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'12px'}} />
                   </div>
-
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      🧂 Salinité (g/L):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="waterSalinity"
-                      value={newPoint.waterSalinity}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
+                    <label style={{display:'block',marginBottom:'4px',fontSize:'12px'}}>Salinité (g/L)</label>
+                    <input type="number" step="0.1" name="waterSalinity" value={newPoint.waterSalinity} onChange={handleInputChange} style={{width:'100%',padding:'6px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'12px'}} />
                   </div>
                 </div>
               </fieldset>
-
               {/* Analyse du sol */}
-              <fieldset style={{ 
-                border: '1px solid #e65100', 
-                borderRadius: '5px', 
-                padding: '15px', 
-                marginBottom: '15px',
-                backgroundColor: '#fffbf0'
-              }}>
-                <legend style={{ color: '#e65100', fontWeight: 'bold' }}>
-                  🌱 Analyse du Sol
-                </legend>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <fieldset style={{border:'1px solid #e65100',padding:'10px',borderRadius:'6px',marginBottom:'12px'}}>
+                <legend style={{fontSize:'12px',color:'#e65100',padding:'0 6px'}}>Analyse du Sol</legend>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      🗿 Calcaire actif (%):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="activeLimestone"
-                      value={newPoint.activeLimestone}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
+                    <label style={{display:'block',marginBottom:'4px',fontSize:'12px'}}>Calcaire actif (%)</label>
+                    <input type="number" step="0.1" name="activeLimestone" value={newPoint.activeLimestone} onChange={handleInputChange} style={{width:'100%',padding:'6px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'12px'}} />
                   </div>
-
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      🍃 Matière organique (%):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="organicMatter"
-                      value={newPoint.organicMatter}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
+                    <label style={{display:'block',marginBottom:'4px',fontSize:'12px'}}>Matière org. (%)</label>
+                    <input type="number" step="0.1" name="organicMatter" value={newPoint.organicMatter} onChange={handleInputChange} style={{width:'100%',padding:'6px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'12px'}} />
                   </div>
-
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      🧂 Salinité du sol (dS/m):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="soilSalinity"
-                      value={newPoint.soilSalinity}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
+                    <label style={{display:'block',marginBottom:'4px',fontSize:'12px'}}>Salinité sol (dS/m)</label>
+                    <input type="number" step="0.1" name="soilSalinity" value={newPoint.soilSalinity} onChange={handleInputChange} style={{width:'100%',padding:'6px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'12px'}} />
                   </div>
-
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px' }}>
-                      🧪 pH du sol (6.0-8.5):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="soilPh"
-                      value={newPoint.soilPh}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '3px',
-                        fontSize: '14px'
-                      }}
-                    />
+                    <label style={{display:'block',marginBottom:'4px',fontSize:'12px'}}>pH sol</label>
+                    <input type="number" step="0.1" name="soilPh" value={newPoint.soilPh} onChange={handleInputChange} style={{width:'100%',padding:'6px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'12px'}} />
                   </div>
                 </div>
               </fieldset>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="submit"
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  ✅ Ajouter les Analyses
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setNewPoint({
-                      latitude: '',
-                      longitude: '',
-                      owner: '',
-                      surfaceArea: '',
-                      flowRate: '',
-                      waterSalinity: '',
-                      activeLimestone: '',
-                      organicMatter: '',
-                      soilSalinity: '',
-                      soilPh: ''
-                    });
-                    setDmsInput({
-                      showDMS: false,
-                      latDegrees: '',
-                      latMinutes: '',
-                      latSeconds: '',
-                      latDirection: 'N',
-                      lngDegrees: '',
-                      lngMinutes: '',
-                      lngSeconds: '',
-                      lngDirection: 'E'
-                    });
-                    setClickPosition(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '12px',
-                    backgroundColor: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  ❌ Annuler
-                </button>
+              {newPoint.latitude && newPoint.longitude && (
+                <div style={{background:'#f8f9fa',border:'1px solid #dee2e6',padding:'8px',borderRadius:'4px',fontSize:'11px',marginBottom:'12px'}}>
+                  <strong>📐 Format DMS:</strong><br/>
+                  <span style={{color:'#28a745'}}>Lat: {convertToDMS(newPoint.latitude,true)}<br/>Lng: {convertToDMS(newPoint.longitude,false)}</span>
+                </div>
+              )}
+
+              <div style={{display:'flex',gap:'10px'}}>
+                <button type="submit" style={{flex:1,padding:'10px',background:'#28a745',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontSize:'14px'}}>✅ Ajouter</button>
+                <button type="button" onClick={() => { setShowAddForm(false); setNewPoint({latitude:'',longitude:'',owner:'',surfaceArea:'',flowRate:'',waterSalinity:'',activeLimestone:'',organicMatter:'',soilSalinity:'',soilPh:''}); setClickPosition(null); }} style={{flex:1,padding:'10px',background:'#6c757d',color:'#fff',border:'none',borderRadius:'5px',cursor:'pointer',fontSize:'14px'}}>❌ Annuler</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Carte Interactive */}
-      <div style={{ marginTop: '30px' }}>
-        <h3 style={{ color: '#2E7D32', marginBottom: '15px' }}>
-          🗺️ Carte Interactive des Points d'Eau
-        </h3>
-        <div style={{ height: '500px', borderRadius: '10px', overflow: 'hidden' }}>
-          <MapContainer
-            center={[34.5, 9.5]}
-            zoom={6}
-            style={{ height: '100%', width: '100%' }}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
+      {/* Carte uniquement */}
+      <div style={{ marginTop: '10px' }}>
+        <h3 style={{ color: '#2E7D32', marginBottom: '10px' }}>Carte Interactive</h3>
+        <div style={{ height: '450px', borderRadius: '10px', overflow: 'hidden' }}>
+          <MapContainer center={[34.5, 9.5]} zoom={6} style={{ height: '100%', width: '100%' }} whenCreated={(map)=>{ mapRef.current = map; }}>
+            {/* Contrôle des couches pour basculer entre carte standard et satellite */}
+            <LayersControl position="topright">
+              <LayersControl.BaseLayer checked name="Carte">
+                <TileLayer
+                  ref={osmLayerRef}
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  crossOrigin="anonymous"
+                  attribution='&copy; OpenStreetMap contributors'
+                />
+              </LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="Satellite">
+                <TileLayer
+                  ref={satLayerRef}
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  crossOrigin="anonymous"
+                  attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+                />
+              </LayersControl.BaseLayer>
+            </LayersControl>
             <MapClickHandler />
-            {waterPoints.map((point, index) => (
-              <Marker
-                key={point._id || index}
-                position={[parseFloat(point.latitude), parseFloat(point.longitude)]}
-              >
+            {filteredPoints.map((p,i) => (
+              <Marker key={p._id || i} position={[parseFloat(p.latitude), parseFloat(p.longitude)]}>
                 <Popup>
-                  <div style={{ padding: '10px', minWidth: '200px' }}>
-                    <h4 style={{ margin: '0 0 10px 0', color: '#2E7D32' }}>
-                      💧 {point.owner}
-                    </h4>
-                    
-                    <div style={{ marginBottom: '10px' }}>
-                      <strong>📍 Position:</strong><br/>
-                      {convertToDMS(parseFloat(point.latitude), true)}<br/>
-                      {convertToDMS(parseFloat(point.longitude), false)}
-                    </div>
-                    
-                    <div style={{ marginBottom: '10px' }}>
-                      <strong>🏞️ Surface:</strong> {point.surfaceArea} ha
-                    </div>
-                    
-                    <div style={{ 
-                      backgroundColor: '#e3f2fd', 
-                      padding: '8px', 
-                      borderRadius: '5px',
-                      marginBottom: '8px'
-                    }}>
-                      <strong>🧪 Analyse Eau:</strong><br/>
-                      Débit: {point.flowRate} L/min<br/>
-                      Salinité: {point.waterSalinity} g/L<br/>
-                      <span style={{ 
-                        color: evaluateWaterQuality(point).color,
-                        fontWeight: 'bold'
-                      }}>
-                        Qualité: {evaluateWaterQuality(point).level}
-                      </span>
-                    </div>
-                    
-                    <div style={{ 
-                      backgroundColor: '#fff3e0', 
-                      padding: '8px', 
-                      borderRadius: '5px',
-                      marginBottom: '10px'
-                    }}>
-                      <strong>🌱 Analyse Sol:</strong><br/>
-                      Calcaire actif: {point.activeLimestone}% | M.O.: {point.organicMatter}%<br/>
-                      Salinité sol: {point.soilSalinity} dS/m | pH: {point.soilPh}<br/>
-                      <span style={{ 
-                        color: evaluateSoilFertility(point).color,
-                        fontWeight: 'bold'
-                      }}>
-                        Fertilité: {evaluateSoilFertility(point).level}
-                      </span>
-                    </div>
-                    
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      <button
-                        onClick={() => generatePDF(point)}
-                        style={{
-                          padding: '5px 10px',
-                          backgroundColor: '#007bff',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '3px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          flex: 1
-                        }}
-                      >
-                        📄 PDF
-                      </button>
-                      <button
-                        onClick={() => handleDelete(point._id)}
-                        style={{
-                          padding: '5px 10px',
-                          backgroundColor: '#dc3545',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '3px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          flex: 1
-                        }}
-                      >
-                        🗑️ Suppr
-                      </button>
+                  <div style={{fontSize:'12px'}}>
+                    <strong style={{color:'#2E7D32'}}>💧 {p.owner}</strong><br/>
+                    Surface: {p.surfaceArea} ha<br/>
+                    {convertToDMS(p.latitude,true)}<br/>
+                    {convertToDMS(p.longitude,false)}<br/>
+                    <div style={{display:'flex',gap:'6px',marginTop:'6px'}}>
+                      <button onClick={() => generatePDF(p)} style={{padding:'4px 8px',background:'#007bff',color:'#fff',border:'none',borderRadius:'3px',cursor:'pointer',fontSize:'11px'}}>PDF</button>
+                      <button onClick={() => handleDeletePoint(p._id)} style={{padding:'4px 8px',background:'#dc3545',color:'#fff',border:'none',borderRadius:'3px',cursor:'pointer',fontSize:'11px'}}>Supprimer</button>
                     </div>
                   </div>
                 </Popup>
@@ -1391,29 +496,7 @@ const WaterPointsMap = () => {
             ))}
           </MapContainer>
         </div>
-        <div style={{
-          marginTop: '10px',
-          padding: '10px',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '5px',
-          fontSize: '12px',
-          color: '#666'
-        }}>
-          💡 <strong>Astuce:</strong> Cliquez sur la carte pour ajouter un nouveau point d'eau à cette position
-        </div>
-      </div>
-
-      <div style={{
-        marginTop: '20px',
-        padding: '15px',
-        backgroundColor: '#d4edda',
-        border: '1px solid #c3e6cb',
-        borderRadius: '5px',
-        fontSize: '14px'
-      }}>
-        <strong>ℹ️ Version Complète:</strong> Cette version combine les formulaires d'analyse complète avec 
-        une carte interactive. Fonctionnalités disponibles : formulaires détaillés (eau/sol), 
-        carte interactive, popups avec détails complets, génération PDF, suppression de points.
+        <div style={{marginTop:'8px',padding:'8px',background:'#f8f9fa',borderRadius:'5px',fontSize:'12px',color:'#666'}}>💡 Astuce: Cliquez sur la carte après avoir ouvert le formulaire pour remplir les coordonnées automatiquement.</div>
       </div>
     </div>
   );
