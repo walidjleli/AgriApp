@@ -322,6 +322,48 @@ const WaterPointsMap = () => {
     }
   };
 
+  // Mosaïque satellite (ArcGIS World Imagery) pour PDF fiable
+  const buildSatelliteMosaic = async (lat, lng, zoom = 15, radius = 1) => {
+    try {
+      const tileSize = 256;
+      const lon2tile = (lon, z) => Math.floor((lon + 180) / 360 * Math.pow(2, z));
+      const lat2tile = (la, z) => Math.floor((1 - Math.log(Math.tan(la * Math.PI / 180) + 1 / Math.cos(la * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
+      const centerX = lon2tile(lng, zoom);
+      const centerY = lat2tile(lat, zoom);
+      const tiles = [];
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const x = centerX + dx;
+            const y = centerY + dy;
+            // ArcGIS: z / y / x
+            const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
+            tiles.push({ dx, dy, url });
+        }
+      }
+      const fetched = await Promise.all(tiles.map(async t => {
+        try {
+          const resp = await fetch(t.url, { mode: 'cors' });
+          const blob = await resp.blob();
+          const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(blob); });
+          return { ...t, img };
+        } catch { return null; }
+      }));
+      if (!fetched.filter(f => f).length) return null;
+      const side = radius * 2 + 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = side * tileSize; canvas.height = side * tileSize;
+      const ctx = canvas.getContext('2d');
+      fetched.forEach(f => { if (f && f.img) ctx.drawImage(f.img, (f.dx + radius) * tileSize, (f.dy + radius) * tileSize); });
+      // Point central (marqueur)
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2, canvas.height / 2, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(255,87,34,0.9)';
+      ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      return canvas.toDataURL('image/png');
+    } catch { return null; }
+  };
+
   // Génération PDF simple pour un point + snapshot carte (zoom centré sans popup)
   const generatePDF = async (point) => {
     const doc = new jsPDF();
@@ -347,18 +389,17 @@ const WaterPointsMap = () => {
 
     const lat = parseFloat(point.latitude); const lng = parseFloat(point.longitude);
     if (!isNaN(lat) && !isNaN(lng)) {
-      let imgData = await captureMapFocused(lat, lng);
-      if (!imgData) {
-        // Fallback mosaïque locale (évite CORS)
-        imgData = await buildTileMosaic(lat, lng, 15, 1);
-      }
-      if (!imgData) {
-        // Dernier fallback: static map externe
-        imgData = await getStaticMapFallback(lat, lng);
-      }
+      // 1. Mosaïque satellite (priorité pour garantir satellite)
+      let imgData = await buildSatelliteMosaic(lat, lng, 15, 1);
+      // 2. Capture dynamique (peut déjà être satellite si couche active)
+      if (!imgData) imgData = await captureMapFocused(lat, lng);
+      // 3. Mosaïque OSM
+      if (!imgData) imgData = await buildTileMosaic(lat, lng, 15, 1);
+      // 4. Static OSM fallback
+      if (!imgData) imgData = await getStaticMapFallback(lat, lng);
       if (imgData) {
         if (y > 180) { doc.addPage(); y = 20; }
-        doc.setFontSize(13); doc.text('Vue Carte (point)', 15, y); y += 5;
+        doc.setFontSize(13); doc.text('Vue Carte (point) - Satellite', 15, y); y += 5;
         const pageWidth = doc.internal.pageSize.getWidth();
         const maxImgWidth = pageWidth - 30;
         const imgWidth = maxImgWidth;
