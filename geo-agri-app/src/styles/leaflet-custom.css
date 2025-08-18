@@ -1,0 +1,115 @@
+/* Styles supplémentaires pour la carte Leaflet */
+
+.leaflet-container {
+  font-family: 'Arial', sans-serif;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 16px !important;
+  line-height: 1.4 !important;
+}
+
+.custom-marker {
+  border: none !important;
+  background: transparent !important;
+}
+
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Animation pour les marqueurs */
+.leaflet-marker-icon {
+  animation: markerBounce 1s ease-in-out;
+}
+
+@keyframes markerBounce {
+  0% {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  50% {
+    transform: translateY(-10px);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Styles pour les contrôles de la carte */
+.leaflet-control-zoom a {
+  border-radius: 5px !important;
+}
+
+.leaflet-control-layers {
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* Amélioration des tooltips */
+.leaflet-tooltip {
+  background-color: rgba(0,0,0,0.8) !important;
+  border: none !important;
+  border-radius: 4px !important;
+  color: white !important;
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+}
+
+/* Style pour le mode ajout */
+.map-add-mode {
+  cursor: crosshair !important;
+}
+
+.map-add-mode .leaflet-container {
+  cursor: crosshair !important;
+}
+
+/* Responsive design pour mobile */
+@media (max-width: 768px) {
+  .leaflet-control-zoom {
+    margin-left: 5px !important;
+    margin-top: 5px !important;
+  }
+  
+  .leaflet-popup-content-wrapper {
+    width: 250px !important;
+  }
+  
+  .leaflet-popup-content {
+    font-size: 14px !important;
+  }
+}
+
+/* Styles pour les boutons dans les popups */
+.popup-button {
+  background-color: #007bff;
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin: 2px;
+  transition: background-color 0.3s ease;
+}
+
+.popup-button:hover {
+  background-color: #0056b3;
+}
+
+.popup-button.danger {
+  background-color: #dc3545;
+}
+
+.popup-button.danger:hover {
+  background-color: #c82333;
+}

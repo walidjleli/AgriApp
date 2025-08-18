@@ -1,0 +1,174 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+input {
+  margin: 0.2rem;
+  padding: 0.3rem;
+  width: 140px;
+}
+
+/* Styles pour les composants de recommandation */
+.water-point-icon {
+  background-color: transparent !important;
+  border: none !important;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crop-recommendation-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.crop-recommendation-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.weather-info {
+  background: linear-gradient(135deg, #87CEEB 0%, #98D8E8 100%);
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.recommendation-button {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  transition: all 0.3s ease;
+}
+
+.recommendation-button:hover {
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+.score-excellent {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+}
+
+.score-good {
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+}
+
+.score-average {
+  background: linear-gradient(135deg, #F44336 0%, #D32F2F 100%);
+}
+
+.score-poor {
+  background: linear-gradient(135deg, #9E9E9E 0%, #757575 100%);
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.05);
+  }
+  100% {
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Styles pour les inputs et selects */
+input[type="text"], input[type="number"], select {
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+input[type="text"]:focus, input[type="number"]:focus, select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+  transform: translateY(-1px);
+}
+
+input[type="text"]:hover, input[type="number"]:hover, select:hover {
+  border-color: #66BB6A;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Animation pour les labels */
+.form-label {
+  font-weight: bold;
+  color: #2E7D32;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+/* Animation de chargement */
+.loading-spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #4CAF50;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
