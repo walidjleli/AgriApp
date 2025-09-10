@@ -11,7 +11,6 @@ const GeoAgriApp = () => {
   
   const [waterPoints, setWaterPoints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
 
   // Données de démonstration pour la Tunisie
   const demoPoints = [
@@ -55,11 +54,11 @@ const GeoAgriApp = () => {
         })
         .then(data => {
           console.log('✅ Données récupérées du backend:', data);
-          setWaterPoints(Array.isArray(data) ? data : demoPoints);
+          setWaterPoints(Array.isArray(data) ? data : []);
         })
         .catch(err => {
-          console.log('⚠️ Backend non disponible, utilisation des données de démo');
-          setWaterPoints(demoPoints);
+          console.log('⚠️ Backend non disponible, aucune donnée chargée');
+          setWaterPoints([]);
         })
         .finally(() => {
           setLoading(false);
@@ -115,181 +114,9 @@ const GeoAgriApp = () => {
         </p>
       </header>
 
-      {/* Navigation */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        marginBottom: '20px'
-      }}>
-        <div style={{
-          display: 'flex',
-          backgroundColor: 'white',
-          borderRadius: '10px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
-        }}>
-          <button
-            onClick={() => setActiveTab('overview')}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              backgroundColor: activeTab === 'overview' ? '#2E7D32' : 'white',
-              color: activeTab === 'overview' ? 'white' : '#333',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            📊 Vue d'ensemble
-          </button>
-          <button
-            onClick={() => setActiveTab('map')}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              backgroundColor: activeTab === 'map' ? '#2E7D32' : 'white',
-              color: activeTab === 'map' ? 'white' : '#333',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            🗺️ Carte Interactive
-          </button>
-        </div>
-      </div>
-
+      {/* Affichage direct de la carte interactive */}
       <div style={{ padding: '0 20px' }}>
-        {/* Onglet Vue d'ensemble */}
-        {activeTab === 'overview' && (
-          <div>
-            {/* Statistiques */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '20px',
-              marginBottom: '30px'
-            }}>
-              <div style={{
-                backgroundColor: '#e3f2fd',
-                padding: '20px',
-                borderRadius: '10px',
-                textAlign: 'center',
-                border: '1px solid #bbdefb'
-              }}>
-                <div style={{ fontSize: '32px', color: '#1976d2' }}>💧</div>
-                <h3 style={{ margin: '10px 0 5px 0', color: '#1976d2' }}>Points d'Eau</h3>
-                <p style={{ fontSize: '24px', fontWeight: 'bold', margin: '0', color: '#0d47a1' }}>
-                  {waterPoints.length}
-                </p>
-              </div>
-              
-              <div style={{
-                backgroundColor: '#e8f5e8',
-                padding: '20px',
-                borderRadius: '10px',
-                textAlign: 'center',
-                border: '1px solid #c8e6c9'
-              }}>
-                <div style={{ fontSize: '32px', color: '#4caf50' }}>✅</div>
-                <h3 style={{ margin: '10px 0 5px 0', color: '#4caf50' }}>Actifs</h3>
-                <p style={{ fontSize: '24px', fontWeight: 'bold', margin: '0', color: '#2e7d32' }}>
-                  {waterPoints.filter(p => p.status === 'Actif').length}
-                </p>
-              </div>
-
-              <div style={{
-                backgroundColor: '#fff3e0',
-                padding: '20px',
-                borderRadius: '10px',
-                textAlign: 'center',
-                border: '1px solid #ffcc02'
-              }}>
-                <div style={{ fontSize: '32px', color: '#ff9800' }}>📊</div>
-                <h3 style={{ margin: '10px 0 5px 0', color: '#ff9800' }}>Gouvernorats</h3>
-                <p style={{ fontSize: '24px', fontWeight: 'bold', margin: '0', color: '#e65100' }}>
-                  {new Set(waterPoints.map(p => p.governorate)).size}
-                </p>
-              </div>
-            </div>
-
-            {/* Liste des points d'eau */}
-            <div style={{
-              backgroundColor: 'white',
-              padding: '25px',
-              borderRadius: '10px',
-              border: '1px solid #e0e0e0',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              <h3 style={{ marginBottom: '20px', color: '#333' }}>📋 Points d'Eau Enregistrés</h3>
-              
-              {waterPoints.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '40px',
-                  color: '#666'
-                }}>
-                  <div style={{ fontSize: '48px', marginBottom: '20px' }}>🏜️</div>
-                  <p>Aucun point d'eau enregistré</p>
-                </div>
-              ) : (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                  gap: '20px'
-                }}>
-                  {waterPoints.map((point, index) => (
-                    <div key={point._id || index} style={{
-                      border: '1px solid #ddd',
-                      borderRadius: '8px',
-                      padding: '15px',
-                      backgroundColor: '#f9f9f9'
-                    }}>
-                      <h4 style={{
-                        color: '#2E7D32',
-                        margin: '0 0 10px 0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}>
-                        💧 {point.name}
-                      </h4>
-                      
-                      <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
-                        <p style={{ margin: '5px 0' }}>
-                          <strong>📍 Gouvernorat:</strong> {point.governorate}
-                        </p>
-                        <p style={{ margin: '5px 0' }}>
-                          <strong>🔧 Type:</strong> {point.type}
-                        </p>
-                        <p style={{ margin: '5px 0' }}>
-                          <strong>📊 État:</strong> 
-                          <span style={{
-                            color: point.status === 'Actif' ? '#28a745' : '#dc3545',
-                            fontWeight: 'bold',
-                            marginLeft: '5px'
-                          }}>
-                            {point.status}
-                          </span>
-                        </p>
-                        <p style={{ margin: '5px 0', fontSize: '12px', color: '#666' }}>
-                          <strong>🌐 Coordonnées:</strong><br/>
-                          Lat: {point.latitude?.toFixed(4)}<br/>
-                          Lng: {point.longitude?.toFixed(4)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Onglet Carte */}
-        {activeTab === 'map' && (
-          <WaterPointsMap />
-        )}
+        <WaterPointsMap />
       </div>
 
       {/* Footer */}
@@ -302,7 +129,7 @@ const GeoAgriApp = () => {
         borderRadius: '5px',
         color: '#2e7d32'
       }}>
-        ✅ Application fonctionnelle - {waterPoints.length} point(s) d'eau enregistré(s)
+        ✅ Application fonctionnelle
       </footer>
     </div>
   );

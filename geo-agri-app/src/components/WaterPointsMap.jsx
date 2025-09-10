@@ -44,12 +44,7 @@ const WaterPointsMap = () => {
     lngDeg: '', lngMin: '', lngSec: '', lngDir: 'E'
   });
 
-  // Données de démonstration simplifiées
-  const demoPoints = [
-    { _id: 'demo1', latitude: 36.8065, longitude: 10.1815, owner: 'Administration Tunis', surfaceArea: '5.2', flowRate: '110', waterSalinity: '1.1', activeLimestone: '18', organicMatter: '2.9', soilSalinity: '0.7', soilPh: '7.2' },
-    { _id: 'demo2', latitude: 35.0378, longitude: 9.4856, owner: 'Coopérative Sidi Bouzid', surfaceArea: '12.8', flowRate: '160', waterSalinity: '0.9', activeLimestone: '22', organicMatter: '2.4', soilSalinity: '0.9', soilPh: '7.6' },
-    { _id: 'demo3', latitude: 35.1677, longitude: 8.8368, owner: 'Ferme Kasserine', surfaceArea: '8.5', flowRate: '95', waterSalinity: '1.4', activeLimestone: '28', organicMatter: '1.8', soilSalinity: '1.3', soilPh: '6.8' }
-  ];
+  // Points de démonstration supprimés - utilise uniquement la base de données
 
   // Gestion du clic sur la carte pour remplir les coordonnées si le formulaire est ouvert
   const MapClickHandler = () => {
@@ -142,12 +137,12 @@ const WaterPointsMap = () => {
     });
   };
 
-  // Chargement initial (backend ou fallback démo)
+  // Chargement initial (backend seulement - pas de fallback démo)
   useEffect(() => {
     fetch('http://localhost:5000/api/points')
       .then(res => { if (!res.ok) throw new Error('Backend indisponible'); return res.json(); })
-      .then(data => setWaterPoints(Array.isArray(data) && data.length ? data : demoPoints))
-      .catch(() => setWaterPoints(demoPoints))
+      .then(data => setWaterPoints(Array.isArray(data) ? data : []))
+      .catch(() => setWaterPoints([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -156,7 +151,7 @@ const WaterPointsMap = () => {
     setNewPoint(prev => ({ ...prev, [name]: value }));
   };
 
-  const filteredPoints = waterPoints.filter(p => p.owner.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredPoints = waterPoints.filter(p => (p.owner ?? '').toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleAddPoint = async (e) => {
     e.preventDefault();
